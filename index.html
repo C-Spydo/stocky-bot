@@ -9,17 +9,31 @@
 </head>
 <body class="flex h-screen bg-gray-100">
     <!-- Sidebar -->
-    <div class="w-64 bg-white shadow-md p-4">
-        <button id="newChat" class="w-full p-2 bg-blue-500 text-white rounded">New Chat</button>
+    <div class="w-64 bg-white shadow-md p-4 flex flex-col">
+        <h1 class="text-xl font-bold text-blue-600">StockyBot by Zeta</h1>
+        <button id="newChat" class="w-full p-2 bg-blue-500 text-white rounded mt-4">New Chat</button>
         <div id="chatHistory" class="mt-4 space-y-2"></div>
     </div>
     
     <!-- Main Chat Area -->
     <div class="flex-1 flex flex-col">
-        <div id="chatWindow" class="flex-1 p-4 overflow-y-auto"></div>
-        <div class="p-4 bg-white flex">
-            <input id="messageInput" class="flex-1 border p-2" placeholder="Type a message...">
-            <button id="sendMessage" class="ml-2 p-2 bg-green-500 text-white">Send</button>
+        <!-- Top Bar -->
+        <div class="p-4 bg-white flex justify-between items-center shadow-md">
+            <h2 class="text-lg font-bold text-gray-700">Welcome to StockyBot</h2>
+            <div class="flex items-center space-x-3">
+                <div id="userProfile" class="w-10 h-10 bg-gray-300 rounded-full"></div>
+                <span id="usernameDisplay" class="font-semibold text-gray-700"></span>
+            </div>
+        </div>
+
+        <!-- Chat Window -->
+        <div id="chatWindow" class="flex-1 p-4 overflow-y-auto bg-white shadow-inner"></div>
+        
+        <!-- Chat Input -->
+        <div class="p-4 bg-gray-100 flex items-center">
+            <input id="messageInput" class="flex-1 border p-2 rounded" placeholder="Type a message...">
+            <button id="voiceInput" class="ml-2 p-2 bg-gray-500 text-white rounded">🎤</button>
+            <button id="sendMessage" class="ml-2 p-2 bg-green-500 text-white rounded">Send</button>
         </div>
     </div>
     
@@ -48,7 +62,6 @@
                 <option value="NFLX">NFLX</option>
                 <option value="AMD">AMD</option>
             </select>
-            <!-- <input id="promptInput" class="w-full p-2 border mt-2" placeholder="Enter your question"> -->
             <button id="startChat" class="w-full p-2 bg-blue-500 text-white mt-2">Start Chat</button>
         </div>
     </div>
@@ -57,57 +70,62 @@
         const baseUrl = "https://stockyai-ykup3.ondigitalocean.app";
         let currentChatId = null;
         let currentStock = null;
-        
+
         $(document).ready(function() {
+            // Check if user info exists, else show modal
             if (!localStorage.getItem("email") || !localStorage.getItem("username")) {
                 $("#userModal").removeClass("hidden");
+            } else {
+                $("#usernameDisplay").text(localStorage.getItem("username"));
             }
-            
+
+            // Save user info
             $("#saveUser").click(async function() {
                 let username = $("#username").val();
                 let email = $("#email").val();
                 localStorage.setItem("username", username);
                 localStorage.setItem("email", email);
+                $("#usernameDisplay").text(username);
+
                 const response = await fetch(`${baseUrl}/api/auth/google`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ name: username, email, google_id: generateRandomString() })
-                    });
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: username, email, google_id: generateRandomString() })
+                });
+
                 $("#userModal").addClass("hidden");
             });
-            
+
+            // Show chat modal
             $("#newChat").click(function() {
                 $("#chatModal").removeClass("hidden");
             });
-            
+
+            // Start chat and save to localStorage
             $("#startChat").click(async function() {
-                // const stock = $("#stockSelect").val();
-                const stock = currentStock;
-                const stock_data = { name:stock, first_prompt: true };
+                const stock = $("#stockSelect").val();
+                const stock_data = { name: stock, first_prompt: true };
 
                 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || {};
                 chatHistory[stock] = stock_data;
                 localStorage.setItem("chatHistory", JSON.stringify(chatHistory));                
-                console.log('Saved history');
-                console.log(chatHistory);
+
                 $("#chatModal").addClass("hidden");
                 updateChatHistory();
             });
-            
+
+            // Send message
             $("#sendMessage").click(async function() {
-                console.log('processing ehre for '+currentStock);
-
                 const message = $("#messageInput").val();
-
                 $("#chatWindow").append(`<div class='p-2 bg-gray-200 rounded my-2'>You: ${message}</div>`);
                 $("#messageInput").val("");
 
                 const email = localStorage.getItem("email");
                 let chatHistory = JSON.parse(localStorage.getItem("chatHistory")) || {};
-                var currentChat = chatHistory[currentStock]
-                console.log(currentChat);
-                
-                if(currentChat.first_prompt == true){
+                let currentChat = chatHistory[currentStock];
+
+                let responseText;
+                if (currentChat.first_prompt) {
                     const response = await fetch(`${baseUrl}/start-chat`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -116,46 +134,47 @@
 
                     const data = await response.json();
                     currentChatId = data.data.chat_id;
-                    chatHistory[currentStock] = { name:currentChat.name, first_prompt: false, chat_id:currentChatId };
+                    chatHistory[currentStock] = { name: currentChat.name, first_prompt: false, chat_id: currentChatId };
                     localStorage.setItem("chatHistory", JSON.stringify(chatHistory));       
                     responseText = data.data.ai_response.response;
-                }
-                else{
+                } else {
                     const response = await fetch(`${baseUrl}/prompt`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ chat_id: currentChat.chat_id, prompt:message })
+                        body: JSON.stringify({ chat_id: currentChat.chat_id, prompt: message })
                     });
+
                     const data = await response.json();
                     responseText = data.data.ai_response;
                 }
-                
-                console.log(responseText);
+
                 $("#chatWindow").append(`<div class='p-2 bg-green-200 rounded my-2'>StockyBot: ${responseText}</div>`);
             });
-            
+
+            // Update chat history
             function updateChatHistory() {
                 let history = JSON.parse(localStorage.getItem("chatHistory")) || {};
-                
-                if (!history || typeof history !== "object" || Array.isArray(history)) {
-                    history = {}; // Ensure it's an object
-                }
-
                 $("#chatHistory").html("");
                 Object.keys(history).forEach(stock => {
-                    let chat = history[stock];
-                    let chatItem = $(`<div class='p-2 bg-gray-300 rounded cursor-pointer'>${chat.name} (${stock})</div>`);
-
-                    chatItem.click(function () {
-                        currentStock = stock; // Update selected stock
+                    let chatItem = $(`<div class='p-2 bg-gray-300 rounded cursor-pointer'>${history[stock].name}</div>`);
+                    chatItem.click(() => {
+                        currentStock = stock;
                         console.log("Selected stock:", currentStock);
                     });
-
                     $("#chatHistory").append(chatItem);
                 });
             }
 
             updateChatHistory();
+
+            // Voice to text
+            $("#voiceInput").click(function() {
+                let recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+                recognition.start();
+                recognition.onresult = function(event) {
+                    $("#messageInput").val(event.results[0][0].transcript);
+                };
+            });
 
             function generateRandomString() {
                 return Math.random().toString(36).substring(2, 16);
